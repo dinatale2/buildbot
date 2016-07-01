@@ -195,12 +195,18 @@ class Ping:
             return defer.succeed(False)
         self.running = True
         log.msg("sending ping")
-        self.d = defer.Deferred()
-        # TODO: add a distinct 'ping' command on the slave.. using 'print'
-        # for this purpose is kind of silly.
-        remote.callRemote("print", "ping").addCallbacks(self._pong,
-                                                        self._ping_failed,
-                                                        errbackArgs=(remote,))
+        try:
+            self.d = defer.Deferred()
+            # TODO: add a distinct 'ping' command on the slave.. using 'print'
+            # for this purpose is kind of silly.
+            remote.callRemote("print", "ping").addCallbacks(self._pong,
+                                                            self._ping_failed,
+                                                            errbackArgs=(remote,))
+        except pb.DeadReferenceError as drerr:
+            log.msg("ping failed: stale broker connection")
+            self.d = None
+            return defer.succeed(False)
+
         return self.d
 
     def _pong(self, res):

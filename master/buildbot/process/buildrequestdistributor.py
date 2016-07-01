@@ -275,6 +275,7 @@ class BasicBuildChooser(BuildChooserBase):
         # use 'preferred' slaves first, if we have some ready
         if self.preferredSlaves:
             slave = self.preferredSlaves.pop(0)
+            log.msg("BuildChooser: chose preferred slave %s for build" % (slave.slave.slavename))
             defer.returnValue(slave)
             return
 
@@ -286,22 +287,26 @@ class BasicBuildChooser(BuildChooserBase):
 
             if not slave or slave not in self.slavepool:
                 # bad slave or no slave returned
+                log.msg("BuildChooser: found a bad/no slave")
                 break
 
             self.slavepool.remove(slave)
 
             canStart = yield self.bldr.canStartWithSlavebuilder(slave)
             if canStart:
+                log.msg("BuildChooser: chose slave %s for build" % (slave.slave.slavename))
                 defer.returnValue(slave)
                 return
 
             # save as a last resort, just in case we need them later
             if self.rejectedSlaves is not None:
+                log.msg("BuildChooser: placed slave %s in the rejected list" % (slave.slave.slavename))
                 self.rejectedSlaves.append(slave)
 
         # if we chewed through them all, use as last resort:
         if self.rejectedSlaves:
             slave = self.rejectedSlaves.pop(0)
+            log.msg("BuildChooser: chose rejected slave %s for build" % (slave.slave.slavename))
             defer.returnValue(slave)
             return
 

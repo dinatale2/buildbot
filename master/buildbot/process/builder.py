@@ -317,6 +317,9 @@ class Builder(config.ReconfigurableServiceMixin,
         build.setBuilder(self)
         log.msg("starting build %s using slave %s" % (build, slavebuilder))
 
+        from pprint import pprint
+        pprint (vars(slavebuilder))
+
         # set up locks
         build.setLocks(self.config.locks)
         cleanups.append(lambda: slavebuilder.slave.releaseLocks())
