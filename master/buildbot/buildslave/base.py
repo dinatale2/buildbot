@@ -873,8 +873,11 @@ class AbstractLatentBuildSlave(AbstractBuildSlave):
             self.substantiation_deferred = defer.Deferred()
             self.substantiation_build = build
             if self.slave is None:
+                log.msg("Slave %s is not substantiated" % (self.slavename))
                 d = self._substantiate(build)  # start up instance
                 d.addErrback(log.err, "while substantiating")
+            else:
+                log.msg("Slave %s is substantiated, waiting for detach" % (self.slavename))
             # else: we're waiting for an old one to detach.  the _substantiate
             # will be done in ``detached`` below.
         return self.substantiation_deferred
