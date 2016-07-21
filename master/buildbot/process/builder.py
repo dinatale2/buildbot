@@ -35,6 +35,8 @@ from buildbot.status.builder import RETRY
 from buildbot.status.buildrequest import BuildRequestStatus
 from buildbot.status.progress import Expectations
 
+from pprint import pprint
+
 
 def enforceChosenSlave(bldr, slavebuilder, breq):
     if 'slavename' in breq.properties:
@@ -316,6 +318,8 @@ class Builder(config.ReconfigurableServiceMixin,
         build = self.config.factory.newBuild(buildrequests)
         build.setBuilder(self)
         log.msg("starting build %s using slave %s" % (build, slavebuilder))
+
+        pprint (vars(slavebuilder))
 
         # set up locks
         build.setLocks(self.config.locks)
