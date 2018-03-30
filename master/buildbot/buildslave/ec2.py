@@ -55,8 +55,8 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
                  valid_ami_owners=None, valid_ami_location_regex=None,
                  elastic_ip=None, identifier=None, secret_identifier=None,
                  aws_id_file_path=None, user_data=None, region=None,
-                 keypair_name='latent_buildbot_slave',
-                 security_name='latent_buildbot_slave',
+                 keypair_name=None,
+                 security_name=None,
                  max_builds=None, notify_on_missing=[], missing_timeout=60 * 20,
                  build_wait_timeout=60 * 10, properties={}, locks=None,
                  spot_instance=False, max_spot_price=1.6, volumes=[],
@@ -89,6 +89,12 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
             else:
                 # verify that regex will compile
                 re.compile(valid_ami_location_regex)
+        if keypair_name is None:
+            keypair_name = 'latent_buildbot_slave'
+            log.msg('Using default keypair name, since none is set')
+        if security_name is None:
+            security_name = 'latent_buildbot_slave'
+            log.msg('Using default keypair name, since none is set')
         self.valid_ami_owners = valid_ami_owners
         self.valid_ami_location_regex = valid_ami_location_regex
         self.instance_type = instance_type
