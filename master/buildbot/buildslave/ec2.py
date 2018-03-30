@@ -57,6 +57,7 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
                  aws_id_file_path=None, user_data=None, region=None,
                  keypair_name=None,
                  security_name=None,
+                 subnet_id=None, security_group_ids=None,
                  max_builds=None, notify_on_missing=[], missing_timeout=60 * 20,
                  build_wait_timeout=60 * 10, properties={}, locks=None,
                  spot_instance=False, max_spot_price=1.6, volumes=[],
@@ -66,6 +67,10 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
         AbstractLatentBuildSlave.__init__(
             self, name, password, max_builds, notify_on_missing,
             missing_timeout, build_wait_timeout, properties, locks)
+        if security_name and subnet_id:
+            raise ValueError(
+                'security_name (EC2 classic security groups) is not supported '
+                'in a VPC.  Use security_group_ids instead.')
         if not ((ami is not None) ^
                 (valid_ami_owners is not None or
                  valid_ami_location_regex is not None)):
@@ -92,7 +97,7 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
         if keypair_name is None:
             keypair_name = 'latent_buildbot_slave'
             log.msg('Using default keypair name, since none is set')
-        if security_name is None:
+        if security_name is None and not subnet_id:
             security_name = 'latent_buildbot_slave'
             log.msg('Using default keypair name, since none is set')
         self.valid_ami_owners = valid_ami_owners
@@ -181,23 +186,24 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
             self.conn.create_key_pair(keypair_name)
 
         # create security group
-        try:
-            group = self.conn.get_all_security_groups(security_name)[0]
-            assert group
-        except boto.exception.EC2ResponseError, e:
-            if 'InvalidGroup.NotFound' in e.body:
-                self.security_group = self.conn.create_security_group(
-                    security_name,
-                    'Authorization to access the buildbot instance.')
-                # Authorize the master as necessary
-                # TODO this is where we'd open the hole to do the reverse pb
-                # connect to the buildbot
-                # ip = urllib.urlopen(
-                #     'http://checkip.amazonaws.com').read().strip()
-                # self.security_group.authorize('tcp', 22, 22, '%s/32' % ip)
-                # self.security_group.authorize('tcp', 80, 80, '%s/32' % ip)
-            else:
-                raise
+        if security_name:
+            try:
+                group = self.conn.get_all_security_groups(security_name)[0]
+                assert group
+            except boto.exception.EC2ResponseError, e:
+                if 'InvalidGroup.NotFound' in e.body:
+                    self.security_group = self.conn.create_security_group(
+                        security_name,
+                        'Authorization to access the buildbot instance.')
+                    # Authorize the master as necessary
+                    # TODO this is where we'd open the hole to do the reverse pb
+                    # connect to the buildbot
+                    # ip = urllib.urlopen(
+                    #     'http://checkip.amazonaws.com').read().strip()
+                    # self.security_group.authorize('tcp', 22, 22, '%s/32' % ip)
+                    # self.security_group.authorize('tcp', 80, 80, '%s/32' % ip)
+                else:
+                    raise
 
         # get the image
         if self.ami is not None:
@@ -211,6 +217,9 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
         if elastic_ip is not None:
             elastic_ip = self.conn.get_all_addresses([elastic_ip])[0]
         self.elastic_ip = elastic_ip
+        self.subnet_id = subnet_id
+        self.security_group_ids = security_group_ids
+        self.classic_security_groups = [self.security_name] if self.security_name else None
         self.tags = tags
 
     def get_image(self):
@@ -277,9 +286,10 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
     def _start_instance(self):
         image = self.get_image()
         reservation = image.run(
-            key_name=self.keypair_name, security_groups=[self.security_name],
+            key_name=self.keypair_name, security_groups=self.classic_security_groups,
             instance_type=self.instance_type, user_data=self.user_data,
-            placement=self.placement)
+            placement=self.placement, subnet_id=self.subnet_id,
+            security_group_ids=self.security_group_ids)
         self.instance = reservation.instances[0]
         instance_id, image_id, start_time = self._wait_for_instance(
             reservation)
@@ -397,11 +407,12 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
                     (self.__class__.__name__, self.slavename, target_price))
         reservations = self.conn.request_spot_instances(
             target_price, self.ami, key_name=self.keypair_name,
-            security_groups=[
-                self.security_name],
+            security_groups=self.classic_security_groups,
             instance_type=self.instance_type,
             user_data=self.user_data,
-            placement=self.placement)
+            placement=self.placement,
+            subnet_id=self.subnet_id,
+            security_group_ids=self.security_group_ids)
         request = self._wait_for_request(reservations[0])
         instance_id = request.instance_id
         reservations = self.conn.get_all_instances(instance_ids=[instance_id])

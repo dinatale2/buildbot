@@ -348,6 +348,27 @@ The ``missing_timeout`` and ``notify_on_missing`` specify how long to wait for a
 ``keypair_name`` and ``security_name`` allow you to specify different names for these AWS EC2 values.
 They both default to ``latent_buildbot_slave``.
 
+VPC Support
+##############
+
+If you are managing slaves within a VPC, your slave configuration must be modified from above.
+You must specify the id of the subnet where you want your slave placed.
+You must also specify security groups created within your VPC as opposed to classic EC2 security groups.
+This can be done by passing the ids of the vpc security groups.
+Note, when using a VPC, you can not specify classic EC2 security groups (as specified by security_name).
+
+::
+
+    from buildbot.plugins import buildslave
+    c['slaves'] = [
+        buildslave.EC2LatentBuildSlave('bot1', 'sekrit', 'm1.large',
+                                       ami='ami-12345',
+                                       keypair_name='latent_buildbot_slave',
+                                       subnet_id='subnet-12345',
+                                       security_group_ids=['sg-12345','sg-67890']
+                                       )
+    ]
+
 Spot instances
 ##############
 

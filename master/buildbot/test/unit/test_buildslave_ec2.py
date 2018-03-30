@@ -86,6 +86,52 @@ class TestEC2LatentBuildSlave(unittest.TestCase):
         self.assertEqual(bs.tags, tags)
 
     @mock_ec2
+    def test_fail_mixing_classic_and_vpc_ec2_settings(self):
+        c = self.botoSetup()
+        amis = c.get_all_images()
+
+        def create_slave():
+            ec2.EC2LatentBuildSlave('bot1', 'sekrit', 'm1.large',
+                                    keypair_name="test_key",
+                                    identifier='publickey',
+                                    secret_identifier='privatekey',
+                                    ami=amis[0].id,
+                                    security_name="classic",
+                                    subnet_id="sn-1234"
+                                    )
+
+        self.assertRaises(ValueError, create_worker)
+
+    @mock_ec2
+    def test_start_vpc_instance(self):
+        c = self.botoSetup()
+
+        vpc_conn = boto.connect_vpc()
+        vpc = vpc_conn.create_vpc("192.168.0.0/24")
+        subnet = vpc_conn.create_subnet(vpc.id, "192.168.0.0/24")
+        amis = c.get_all_images()
+
+        sg = c.create_security_group("test_sg", "test_sg", vpc.id)
+        bs = ec2.EC2LatentBuildSlave('bot1', 'sekrit', 'm1.large',
+                                    identifier='publickey',
+                                    secret_identifier='privatekey',
+                                    keypair_name="test_key",
+                                    security_group_ids=[sg.id],
+                                    subnet_id=subnet.id,
+                                    ami=amis[0].id
+                                    )
+
+        instance_id, _, _ = bs._start_instance()
+        instances = [i for i in c.get_only_instances()
+                     if i.state != "terminated"]
+
+        self.assertEqual(len(instances), 1)
+        self.assertEqual(instances[0].id, instance_id)
+        self.assertEqual(instances[0].subnet_id, subnet.id)
+        self.assertEqual(len(instances[0].groups), 1)
+        self.assertEqual(instances[0].groups[0].id, sg.id)
+
+    @mock_ec2
     def test_start_instance(self):
         c = self.botoSetup()
         amis = c.get_all_images()
