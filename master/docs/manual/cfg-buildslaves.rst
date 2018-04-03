@@ -348,6 +348,29 @@ The ``missing_timeout`` and ``notify_on_missing`` specify how long to wait for a
 ``keypair_name`` and ``security_name`` allow you to specify different names for these AWS EC2 values.
 They both default to ``latent_buildbot_slave``.
 
+If you want to attach new ephemeral volumes, use the the block_device_map attribute.
+This follows the BlockDeviceMap configuration of boto almost exactly, essentially acting as a passthrough.
+The only distinction is that the volumes default to deleting on termination to avoid leaking volume resources when slaves are terminated.
+See boto documentation for further details.
+
+::
+
+    from buildbot.plugins import buildslave
+    c['slaves'] = [
+        buildslave.EC2LatentBuildSlave('bot1', 'sekrit', 'm1.large',
+                                       ami='ami-12345',
+                                       block_device_map= {
+                                        "/dev/xvdb" : {
+                                        "volume_type": "io1",
+                                        "iops": 1000,
+                                        "size": 100
+                                       }
+                                      }
+                                      )
+    ]
+
+
+
 VPC Support
 ##############
 

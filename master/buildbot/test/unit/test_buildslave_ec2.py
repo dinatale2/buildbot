@@ -151,6 +151,48 @@ class TestEC2LatentBuildSlave(unittest.TestCase):
         self.assertEqual(instances[0].tags, {})
 
     @mock_ec2
+    def test_start_instance_volumes(self):
+        c = self.botoSetup()
+        amis = c.get_all_images()
+        bs = ec2.EC2LatentBuildSlave('bot1', 'sekrit', 'm1.large',
+                                     identifier='publickey',
+                                     secret_identifier='privatekey',
+                                     ami=amis[0].id,
+                                     block_device_map={
+                                         "/dev/xvdb": {
+                                             "volume_type": "io1",
+                                             "iops": 10,
+                                             "size": 20,
+                                         },
+                                         "/dev/xvdc": {
+                                             "volume_type": "gp2",
+                                             "size": 30,
+                                             "delete_on_termination": False
+                                         }
+                                         }
+                                     )
+
+        # moto does not currently map volumes properly.  below ensures
+        # that my conversion code properly composes it, including
+        # delete_on_termination default.
+        from boto.ec2.blockdevicemapping import BlockDeviceType
+        self.assertEqual(set(['/dev/xvdb', '/dev/xvdc']), set(bs.block_device_map.keys()))
+
+        def assertBlockDeviceEqual(a, b):
+            self.assertEqual(a.volume_type, b.volume_type)
+            self.assertEqual(a.iops, b.iops)
+            self.assertEqual(a.size, b.size)
+            self.assertEqual(a.delete_on_termination, b.delete_on_termination)
+
+        assertBlockDeviceEqual(
+            BlockDeviceType(volume_type='io1', iops=10, size=20, delete_on_termination=True),
+            bs.block_device_map['/dev/xvdb'])
+
+        assertBlockDeviceEqual(
+            BlockDeviceType(volume_type='gp2', size=30, delete_on_termination=False),
+            bs.block_device_map['/dev/xvdc'])
+
+    @mock_ec2
     def test_start_instance_tags(self):
         c = self.botoSetup()
         amis = c.get_all_images()

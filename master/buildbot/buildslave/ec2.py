@@ -29,6 +29,8 @@ import boto
 import boto.ec2
 import boto.exception
 
+from boto.ec2.blockdevicemapping import BlockDeviceType, BlockDeviceMapping
+
 from twisted.internet import defer
 from twisted.internet import threads
 from twisted.python import log
@@ -62,7 +64,7 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
                  build_wait_timeout=60 * 10, properties={}, locks=None,
                  spot_instance=False, max_spot_price=1.6, volumes=[],
                  placement=None, price_multiplier=1.2, tags={},
-                 delete_vol_term=True):
+                 delete_vol_term=True, block_device_map=None):
 
         AbstractLatentBuildSlave.__init__(
             self, name, password, max_builds, notify_on_missing,
@@ -221,6 +223,21 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
         self.security_group_ids = security_group_ids
         self.classic_security_groups = [self.security_name] if self.security_name else None
         self.tags = tags
+        self.block_device_map = self.create_block_device_mapping(block_device_map)
+
+    def create_block_device_mapping(self, mapping_definitions):
+        if not mapping_definitions:
+            return None
+
+        result = BlockDeviceMapping()
+        for device_name, device_properties in mapping_definitions.iteritems():
+            modified_device_properties = dict(device_properties)
+            # Since latent slaves are ephemeral, not leaking volumes on termination
+            # is a much safer default.
+            if 'delete_on_termination' not in modified_device_properties:
+                modified_device_properties['delete_on_termination'] = True
+            result[device_name] = BlockDeviceType(**modified_device_properties)
+        return result
 
     def get_image(self):
         if self.image is not None:
@@ -289,7 +306,8 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
             key_name=self.keypair_name, security_groups=self.classic_security_groups,
             instance_type=self.instance_type, user_data=self.user_data,
             placement=self.placement, subnet_id=self.subnet_id,
-            security_group_ids=self.security_group_ids)
+            security_group_ids=self.security_group_ids,
+            block_device_map=self.block_device_map)
         self.instance = reservation.instances[0]
         instance_id, image_id, start_time = self._wait_for_instance(
             reservation)
@@ -412,7 +430,8 @@ class EC2LatentBuildSlave(AbstractLatentBuildSlave):
             user_data=self.user_data,
             placement=self.placement,
             subnet_id=self.subnet_id,
-            security_group_ids=self.security_group_ids)
+            security_group_ids=self.security_group_ids,
+            block_device_map=self.block_device_map)
         request = self._wait_for_request(reservations[0])
         instance_id = request.instance_id
         reservations = self.conn.get_all_instances(instance_ids=[instance_id])
