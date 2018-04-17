@@ -51,6 +51,7 @@ class MasterShellCommand(BuildStep):
 
     def __init__(self, command,
                  env=None, path=None, usePTY=0, interruptSignal="KILL",
+                 logEnviron=True,
                  **kwargs):
         BuildStep.__init__(self, **kwargs)
 
@@ -59,6 +60,7 @@ class MasterShellCommand(BuildStep):
         self.path = path
         self.usePTY = usePTY
         self.interruptSignal = interruptSignal
+        self.logEnviron = logEnviron
 
     class LocalPP(ProcessProtocol):
 
@@ -144,7 +146,8 @@ class MasterShellCommand(BuildStep):
                                            "lists; key '%s' is incorrect" % (key,))
                     newenv[key] = p.sub(subst, env[key])
             env = newenv
-        stdio_log.addHeader(" env: %r\n" % (env,))
+        if self.logEnviron:
+            stdio_log.addHeader(" env: %r\n" % (env,))
 
         # TODO add a timeout?
         self.process = reactor.spawnProcess(self.LocalPP(self), argv[0], argv,
